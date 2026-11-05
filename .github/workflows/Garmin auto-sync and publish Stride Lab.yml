@@ -1,0 +1,61 @@
+name: Garmin auto-sync and publish Stride Lab
+
+on:
+  schedule:
+    # UTC; avoids the start-of-hour congestion. Roughly every six hours.
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: garmin-sync-pages
+  cancel-in-progress: false
+
+jobs:
+  sync-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Sync Garmin and build safe public site
+        env:
+          GARMIN_PERSONAL_API_KEY: ${{ secrets.GARMIN_PERSONAL_API_KEY }}
+          STRIDE_ARCHIVE_KEY: ${{ secrets.STRIDE_ARCHIVE_KEY }}
+          PUBLISH_PHYSIOLOGY: ${{ vars.PUBLISH_PHYSIOLOGY }}
+          DETAIL_BATCH: '60'
+        run: python cloud_sync.py
+      - name: Save encrypted history (never plaintext)
+        run: |
+          git config user.name 'stride-lab-bot'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add -- state/history.enc
+          if ! git diff --cached --quiet; then
+            git commit -m 'Update encrypted Garmin sync state [skip ci]'
+            git push
+          fi
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+      - name: Upload public site
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: ./site
+      - name: Publish GitHub Pages site
+        id: deployment
+        uses: actions/deploy-pages@v4

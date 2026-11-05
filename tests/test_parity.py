@@ -19,8 +19,7 @@ class OnlineParityTests(unittest.TestCase):
     def _run_case(self, share):
         with tempfile.TemporaryDirectory() as folder:
             target=Path(folder)/'project'
-            shutil.copytree(ROOT,target,ignore=shutil.ignore_patterns('__pycache__','*.pyc','site','.private_work','preview-online.png'))
-            env={**os.environ,'STRIDE_ARCHIVE_KEY':Fernet.generate_key().decode(),
+shutil.copytree(ROOT,target,ignore=shutil.ignore_patterns('__pycache__','*.pyc','site','.private_work','preview-online.png','state'))            env={**os.environ,'STRIDE_ARCHIVE_KEY':Fernet.generate_key().decode(),
                  'GARMIN_PERSONAL_API_KEY':'TEST_ONLY_CREDENTIAL',
                  'PUBLISH_PHYSIOLOGY':'true' if share else 'false',
                  'PUBLISH_ACTIVITY_SUMMARIES':'true' if share else 'false'}

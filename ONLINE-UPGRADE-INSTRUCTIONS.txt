@@ -1,0 +1,67 @@
+STRIDE LAB ONLINE — SAME INTERFACE AS THE LOCAL DASHBOARD
+Existing repository: https://github.com/duongyyy/running-dashboard
+
+This upgrades the EXISTING GitHub Pages dashboard. It keeps your current GitHub Actions workflow,
+existing encrypted state/history.enc, Garmin Personal API key secret, and archive encryption secret.
+
+WHAT TO UPLOAD
+---------------
+This update contains ONLY:
+  cloud_sync.py                 (replace existing file at repository root)
+  site_assets/index.html       (replace)
+  site_assets/style.css        (replace)
+  site_assets/app.js           (replace)
+  tests/test_parity.py         (new verification test, optional)
+
+Do NOT upload the outer ZIP file itself or a parent folder. The contents should be uploaded
+at the ROOT of the repository, where cloud_sync.py and the site_assets folder already exist.
+
+UPGRADE USING YOUR WEB BROWSER
+------------------------------
+1. Extract the ZIP on your Windows computer.
+2. Go to https://github.com/duongyyy/running-dashboard and select the Code tab.
+3. Ensure you are at the MAIN (root) folder, not inside site_assets or an old Stride Lab folder.
+4. Select Add file -> Upload files.
+5. Drag the contents from inside the extracted folder into the uploader. Upload the
+   cloud_sync.py file and the site_assets and tests folders, preserving their paths.
+6. Commit changes to the main branch. The existing workflow stays unchanged.
+7. Open the Actions tab and manually run the existing 'Stride Lab — Garmin auto-sync and publish' workflow.
+8. Wait for green checks on Sync Garmin and Publish website.
+9. Visit https://duongyyy.github.io/running-dashboard/ and hard-refresh (Ctrl + Shift + R).
+
+TO SHOW YOUR HR ZONES, LT AND RUNNING HISTORY
+-------------------------------------------
+In repository Settings -> Secrets and variables -> Actions -> Variables, set:
+
+  PUBLISH_PHYSIOLOGY           true
+  PUBLISH_ACTIVITY_SUMMARIES   true
+
+These are VARIABLES, not Secrets. The Garmin key and STRIDE_ARCHIVE_KEY remain in the Secrets tab.
+Run the workflow again after setting variables. New summary data is published after each successful sync.
+
+IMPORTANT PRIVACY NOTE
+----------------------
+Your GitHub Pages URL is PUBLICLY ACCESSIBLE. Anyone with the link can view published statistics.
+If you set the two variables to true, the website will show dates, distances, durations, paces,
+HR summaries and up to 300 relative-time HR charts for individual runs. It does NOT publish Garmin
+keys, raw FIT files, GPS routes, exact start times, activity names or Garmin source identifiers.
+It is not a sign-in-protected dashboard. Do not enable these variables for sensitive information
+unless you are comfortable with these values appearing on a public website.
+
+WHAT MATCHES THE LOCAL DASHBOARD
+-------------------------------
+The UI styling, responsive navigation, stat cards, PB tables and trends, zone charts, weekly and
+monthly mileage, consistency heatmap, activity explorer, insights and race projection share the
+same code and layout as the local Windows version.
+
+WHAT CANNOT BE THE SAME ON FREE GITHUB PAGES
+--------------------------------------------
+GitHub Pages cannot run your local Python server. Therefore the web dashboard is read-only.
+You cannot paste Garmin keys, request an immediate Garmin sync, import FIT files, manually edit
+HR zones/physiology, or persist official race results through the website. The local private application supports some
+of these edits, but local changes do NOT automatically transfer to the GitHub archive.
+The online site recalculates from its own encrypted GitHub archive at scheduled GitHub Actions
+runs, usually every six hours while the workflow remains enabled.
+
+Tests: python -m unittest discover -s tests -v
+This build passed six local automated tests and a simulated browser flow.

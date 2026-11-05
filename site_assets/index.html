@@ -1,26 +1,37 @@
 <!doctype html>
-<html lang="en-AU"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="dark"><meta name="robots" content="noindex, nofollow">
-<title>Stride Lab — Running Performance</title>
-<link rel="stylesheet" href="./style.css">
-</head><body>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark"><title>Stride Lab — Running Intelligence</title>
+<link rel="stylesheet" href="./style.css?v=2.0">
+</head>
+<body>
 <div class="shell">
-<aside class="sidebar"><div class="logo"><span class="emblem">↗</span><span>STRIDE<span class="lime">LAB</span><small>RUNNING PERFORMANCE</small></span></div>
-<div class="section">THE DASHBOARD</div>
-<nav id="nav" aria-label="Dashboard navigation">
-<button class="active" data-tab="overview">▦ &nbsp; Overview</button>
-<button data-tab="records">◈ &nbsp; Personal bests</button>
-<button data-tab="activities">≡ &nbsp; Running history</button>
-<button data-tab="physiology">♡ &nbsp; Heart rate &amp; LT</button>
-<button data-tab="trends">▤ &nbsp; Training trends</button>
-<button data-tab="insights">✳ &nbsp; Training insights</button>
-</nav>
-<div class="side-foot"><span class="dot"></span> Public, read-only view<br><span class="muted">Powered by Garmin-derived training statistics</span></div>
-</aside>
-<div class="content"><header class="topbar"><span>PERFORMANCE STUDIO <span class="muted">/</span> <span id="crumb">Overview</span></span><span class="tag">SHARED PERFORMANCE</span></header>
-<main id="main" class="main"><div class="card">Loading published statistics…</div></main>
-<footer>STRIDE LAB <span class="muted">· Read-only public snapshot · Not medical advice</span></footer>
-</div></div>
-<script src="./app.js" defer></script>
+  <aside class="sidebar">
+    <div class="brand"><div class="brand-logo"><span class="brand-mark">↗</span></div><div><b>STRIDE<span>LAB</span></b><small>RUNNING INTELLIGENCE</small></div></div>
+    <div class="side-label">WORKSPACE</div>
+    <nav id="nav">
+      <button class="nav-item active" data-page="overview"><span class="nav-icon">▦</span><span>Overview</span></button>
+      <button class="nav-item" data-page="records"><span class="nav-icon">◈</span><span>Personal bests</span></button>
+      <button class="nav-item" data-page="physiology"><span class="nav-icon">♡</span><span>Heart rate & LT</span></button>
+      <button class="nav-item" data-page="trends"><span class="nav-icon">▤</span><span>Training trends</span></button>
+      <button class="nav-item" data-page="activities"><span class="nav-icon">≡</span><span>Activity explorer</span></button>
+      <button class="nav-item" data-page="insights"><span class="nav-icon">✳</span><span>Training insights</span></button>
+    </nav>
+    <div class="side-label second-label">MANAGE</div>
+    <nav><button class="nav-item" data-page="settings"><span class="nav-icon">⚙</span><span>About & data sources</span></button></nav>
+    <div class="sidebar-bottom">
+      <div class="sidebar-soft"><div class="micro">CONNECTED DATA</div><div class="source-line"><span class="pulse-dot" id="side-dot"></span> Garmin Connect</div><p id="side-source">Not connected</p></div>
+      <div class="author">PUBLIC READ-ONLY <span>v2.0</span></div>
+    </div>
+  </aside>
+  <div class="app-body">
+    <header class="topbar"><div class="top-left"><button class="mobile-nav" id="mobile-nav" aria-label="Open navigation">☰</button><span class="crumb">PERFORMANCE STUDIO</span><span class="crumb-slash">/</span><span class="crumb-current" id="crumb">Overview</span></div><div class="top-actions"><span id="demo-indicator" class="demo-indicator hidden">SAMPLE DATA</span><div id="connection-badge" class="conn-badge"><span class="pulse-dot"></span> Not connected</div><button class="top-button" id="sync-btn"><span class="rotatable">↻</span> Refresh view</button><button class="avatar" id="settings-shortcut" title="Connections and settings">⚙</button></div></header>
+    <main id="main" class="main"><div class="loading-card"><span class="spinner"></span> Loading your dashboard…</div></main>
+    <footer class="foot">STRIDE LAB <span>•</span> YOUR DATA, YOUR PACE. <span class="foot-right">Not medical advice · Read-only published dashboard</span></footer>
+  </div>
+</div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<div id="modal-root"></div>
+<script src="./app.js?v=2.0" defer></script>
 </body></html>

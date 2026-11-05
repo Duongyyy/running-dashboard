@@ -63,8 +63,8 @@ CIPHER = bootstrap_state()
 from server.garmin import GarminPersonal, GarminAPIError
 from server.storage import db, get_config, put_config, DB
 from server.fit_reader import parse_activity_archive
-from server.metrics import dashboard, profile_parse
-from public_export import sanitized
+from server.metrics import dashboard, profile_parse, clock, pace_string
+from public_export import sanitized, slim_list
 
 
 def is_run(raw):
@@ -184,50 +184,108 @@ def sync(api):
     return {'time':stamp, 'runs':total, 'fit_ready':detailed, 'fit_pending':pending}
 
 
+def _public_activity_data(rows, include_physiology, include_activities):
+    """Only date-level activity summaries and relative HR samples; never coordinates, IDs or raw FIT."""
+    if not include_activities:
+        return [], {}
+    import zlib, math
+    feed=[]
+    streams={}
+    for idx, row in enumerate(rows[:5000]):
+        km = float(row['distance'] or 0)/1000
+        duration=float(row['duration'] or 0)
+        if km<=0 or duration<=0:continue
+        day=str(row['date'] or '')[:10]
+        if len(day)!=10 or day[4]!='-' or day[7]!='-':continue
+        item_id=f'run-{idx+1}'  # synthetic public ID; not Garmin's private source identifier
+        item={'id':item_id,'name':'Garmin run','date':day,'km':round(km,2),
+              'duration_seconds':round(duration),'seconds':round(duration),
+              'elapsed_seconds':round(float(row['elapsed'] or duration)),
+              'time':clock(duration),'pace':pace_string(duration,km),
+              'ascent_m':round(float(row['ascent'] or 0)),
+              'ascent':round(float(row['ascent'] or 0)),
+              'detail_status':'ready' if row['detail_status']=='ready' else 'summary'}
+        if include_physiology:
+            for k, out in [('avg_hr','hr'),('max_hr','peak_hr')]:
+                val=row[k]
+                if val is not None and 30<=float(val)<=250:
+                    item[out]=round(float(val))
+                    if out=='hr':item['average_hr']=item[out]
+                    if out=='peak_hr':item['recorded_peak_hr']=item[out]
+        feed.append(item)
+        # Detailed relative-time HR only, no timestamps, GPS, altitudes, paths or raw FIT data.
+        if include_physiology and row['samples'] and len(streams)<300:
+            try:
+                points=json.loads(zlib.decompress(row['samples']))
+                suitable=[x for x in points if isinstance(x,dict) and isinstance(x.get('t'),(int,float))
+                          and isinstance(x.get('hr'),(int,float)) and 30<=x['hr']<=250]
+                if len(suitable)>2:
+                    start=suitable[0]['t']
+                    step=max(1,(len(suitable)+129)//130)
+                    streams[item_id]=[{'minute':round((x['t']-start)/60,1),'hr':round(x['hr'])}
+                                      for x in suitable[::step][:140] if 0<=x['t']-start<=24*3600]
+            except (ValueError,TypeError,IndexError,zlib.error):
+                pass
+    return feed, streams
+
+
 def make_site(summary):
     SITE.mkdir(exist_ok=True)
     for name in ['index.html', 'style.css', 'app.js']:
         shutil.copy2(ASSETS/name, SITE/name)
     with db() as c:
-        rows = c.execute('SELECT * FROM activities ORDER BY date DESC').fetchall()
-        official = [dict(r) for r in c.execute('SELECT * FROM records').fetchall()]
-    raw = dashboard(rows, get_config('settings', {}),get_config('profile_normalized', {}),official)
-    physiology = (os.environ.get('PUBLISH_PHYSIOLOGY') or '').lower() == 'true'
-    data = sanitized(raw, include_physiology=physiology, reference_values=get_config('profile_normalized', {}))
-    # Separate, opt-in public activity summaries. Do not publish names, ids,
-    # start times, coordinates, routes, FIT samples or Garmin credentials.
-    activity_feed = (os.environ.get('PUBLISH_ACTIVITY_SUMMARIES') or '').lower() == 'true'
-    data['activity_feed_shared'] = activity_feed
-    data['activity_feed'] = []
-    if activity_feed:
-        for row in rows[:5000]:
-            if row['distance'] is None or row['duration'] is None or row['distance'] <= 0:
-                continue
-            date = str(row['date'] or '')[:10]
-            if len(date) != 10 or date[4] != '-' or date[7] != '-':
-                continue
-            km = round(float(row['distance']) / 1000, 2)
-            seconds = round(float(row['duration']))
-            item = {
-                'date': date, 'km': km, 'duration_seconds': seconds,
-                'elapsed_seconds': round(float(row['elapsed'] or row['duration'])),
-                'pace_seconds': round(seconds / km) if km else None,
-                'ascent_m': round(float(row['ascent'] or 0)),
-                'details': bool(row['detail_status'] == 'ready'),
-            }
-            if physiology:
-                for input_key, out_key in [('avg_hr', 'average_hr'), ('max_hr', 'recorded_peak_hr')]:
-                    val = row[input_key]
-                    if val is not None and 30 <= float(val) <= 250:
-                        item[out_key] = round(float(val))
-            data['activity_feed'].append(item)
-    data['sync'] = {'garmin_last_success': summary['time'], 'historical_archive_complete':get_config('archive_complete',False),
-                    'fits_available':summary['fit_ready'], 'fits_pending':summary['fit_pending']}
-    (SITE / 'data.json').write_text(json.dumps(data,indent=2, ensure_ascii=False), encoding='utf-8')
-    (SITE / '.nojekyll').write_text('', encoding='utf-8')
-    (SITE / 'robots.txt').write_text('User-agent: *\nDisallow: /\n', encoding='utf-8')
-    print('Generated public read-only performance site. Personal activity details omitted.')
+        rows=c.execute('SELECT * FROM activities ORDER BY date DESC').fetchall()
+        official=[dict(r) for r in c.execute('SELECT * FROM records').fetchall()]
+    profile=get_config('profile_normalized',{})
+    raw=dashboard(rows,get_config('settings',{}),profile,official)
+    physiology=(os.environ.get('PUBLISH_PHYSIOLOGY') or '').lower()=='true'
+    activity_feed=(os.environ.get('PUBLISH_ACTIVITY_SUMMARIES') or '').lower()=='true'
+    published=sanitized(raw,include_physiology=physiology,reference_values=profile)
+    feed, streams=_public_activity_data(rows,physiology,activity_feed)
+    published['activity_feed_shared']=activity_feed
+    published['activity_feed']=feed
+    published['activity_hr_streams']=streams
+    published['sync']={'garmin_last_success':summary['time'],
+                      'historical_archive_complete':get_config('archive_complete',False),
+                      'fits_available':summary['fit_ready'],'fits_pending':summary['fit_pending']}
 
+    # Same field schema as the original locally rendered Stride Lab UI. Sanitise field-by-field.
+    info=published['overview']
+    summary_card={**info,'detailed_runs':published['coverage']['detailed']}
+    public_state={
+        'summary':summary_card,
+        'pbs':published['pbs'],
+        'pb_trend_5k':published['pb_trend_5k'],
+        'weeks':[{**w,'longest_km':next((x['km'] for x in published['long_runs'] if x['week']==w.get('week')),0)}
+                 for w in published['weeks']],
+        'months':published['months'],
+        'heatmap':slim_list(raw.get('heatmap'),['date','km','runs'],98),
+        'long_runs':published['long_runs'],
+        'intensity_weeks':published['intensity_weeks'],
+        'upcoming_guidance':published['upcoming_guidance'],
+        'zones':published['zones'],
+        'time_in_zone':published['time_in_zone'],
+        'threshold':published['threshold'],
+        'efficiency':slim_list(raw.get('efficiency'),['date','hr','pace','distance'],80) if physiology else [],
+        'efficiency_comparison':published.get('efficiency_comparison') or None,
+        'recent':feed[:24],
+        'insights':published['insights'],
+        'race_projection':published['race_projection'] if published['race_projection'] else None,
+        'goal':published['goal'],
+        'coverage':published['coverage'],
+        'connection':{
+            'connected':True,'last_sync':summary['time'],'last_sync_error':None,
+            'sync':{'running':False},
+            'settings':{'zone_method':'auto'},
+            'profile':published['physiology_references'],
+            'physiology_status':{},
+        },
+    }
+    published['public_state']=public_state
+    (SITE/'data.json').write_text(json.dumps(published,ensure_ascii=False,separators=(',',':')),encoding='utf-8')
+    (SITE/'.nojekyll').write_text('',encoding='utf-8')
+    (SITE/'robots.txt').write_text('User-agent: *\nDisallow: /\n',encoding='utf-8')
+    print('Created local-interface-matching read-only website. No Garmin keys, GPS, raw FIT or activity source IDs exported.')
 
 def persist(cipher):
     # Write only encrypted history to Git. Preserve continuity for personal bests.

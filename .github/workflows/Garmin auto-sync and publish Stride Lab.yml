@@ -1,10 +1,10 @@
-name: Garmin auto-sync and publish Stride Lab
+name: Stride Lab — Garmin auto-sync and publish
 
 on:
-  schedule:
-    # UTC: around every six hours; GitHub scheduling may be delayed.
-    - cron: '17 */6 * * *'
   workflow_dispatch:
+  schedule:
+    # Every ~6 hours. GitHub Actions may delay scheduled runs.
+    - cron: '17 */6 * * *'
 
 permissions:
   contents: write
@@ -12,7 +12,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: garmin-sync-pages
+  group: stride-lab-main-sync
   cancel-in-progress: false
 
 jobs:
@@ -21,72 +21,75 @@ jobs:
     timeout-minutes: 90
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.publish.outputs.page_url }}
     steps:
-      - name: Check out repository
+      - name: Download repository
         uses: actions/checkout@v4
         with:
           persist-credentials: true
 
-      - name: Find dashboard files
-        id: locate
-        shell: bash
+      - name: Check files are in repository's main folder
         run: |
           set -euo pipefail
-          mapfile -t found < <(find . -type f -name cloud_sync.py -not -path './.git/*' | sort)
-          if [ "${#found[@]}" -ne 1 ]; then
-            echo "Expected exactly one cloud_sync.py, found ${#found[@]}." >&2
-            printf '%s\n' "${found[@]}" >&2
-            echo "Please upload one complete Stride Lab project, including requirements.txt." >&2
-            exit 1
-          fi
-          project_dir="$(dirname "${found[0]}")"
-          if [ ! -f "$project_dir/requirements.txt" ]; then
-            echo "Missing $project_dir/requirements.txt" >&2
-            echo "Upload requirements.txt into the same directory as cloud_sync.py." >&2
-            exit 1
-          fi
-          echo "path=$project_dir" >> "$GITHUB_OUTPUT"
-          echo "STRIDE_APP_DIR=$project_dir" >> "$GITHUB_ENV"
-          echo "Located Stride Lab at: $project_dir"
+          for file in cloud_sync.py public_export.py requirements.txt server/__init__.py server/garmin.py server/metrics.py server/storage.py server/fit_reader.py site_assets/index.html site_assets/app.js site_assets/style.css; do
+            if [ ! -f "$file" ]; then
+              echo "ERROR: Missing $file at the root of the repository."
+              echo "In GitHub, use Add file > Upload files from the MAIN Code page."
+              exit 1
+            fi
+          done
+          echo 'All dashboard source files are present.'
 
-      - name: Install Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: python -m pip install -r "$STRIDE_APP_DIR/requirements.txt"
+        run: python -m pip install -r requirements.txt
 
-      - name: Sync Garmin and build safe public site
+      - name: Check Python imports and application tests
+        run: |
+          python -c 'from server.garmin import GarminPersonal; from server.metrics import dashboard; from public_export import sanitized; print("Stride Lab imports verified")'
+          python -m unittest discover -s tests -v
+
+      - name: Recover previous encrypted history if present
+        shell: bash
+        run: |
+          if [ ! -f state/history.enc ] && [ -f Stride-Lab-Free-AutoSync-GitHub/state/history.enc ]; then
+            mkdir -p state
+            cp Stride-Lab-Free-AutoSync-GitHub/state/history.enc state/history.enc
+            echo 'Existing encrypted Garmin history carried forward.'
+          fi
+
+      - name: Sync Garmin and generate read-only website
         env:
           GARMIN_PERSONAL_API_KEY: ${{ secrets.GARMIN_PERSONAL_API_KEY }}
           STRIDE_ARCHIVE_KEY: ${{ secrets.STRIDE_ARCHIVE_KEY }}
           PUBLISH_PHYSIOLOGY: ${{ vars.PUBLISH_PHYSIOLOGY }}
           PUBLISH_ACTIVITY_SUMMARIES: ${{ vars.PUBLISH_ACTIVITY_SUMMARIES }}
           DETAIL_BATCH: '60'
-        run: |
-          cd "$STRIDE_APP_DIR"
-          python cloud_sync.py
+        run: python cloud_sync.py
 
-      - name: Save encrypted history (never plaintext)
+      - name: Commit ONLY the encrypted activity archive
+        shell: bash
         run: |
-          git config user.name 'stride-lab-bot'
-          git config user.email 'github-actions[bot]@users.noreply.github.com'
-          git add -- "$STRIDE_APP_DIR/state/history.enc"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- state/history.enc
           if ! git diff --cached --quiet; then
-            git commit -m 'Update encrypted Garmin sync state [skip ci]'
+            git commit -m 'Update encrypted Garmin history [skip ci]'
             git push
           fi
 
-      - name: Configure GitHub Pages
+      - name: Configure Pages
         uses: actions/configure-pages@v5
 
-      - name: Upload public site
+      - name: Upload generated website
         uses: actions/upload-pages-artifact@v4
         with:
-          path: ${{ steps.locate.outputs.path }}/site
+          path: ./site
 
-      - name: Publish GitHub Pages site
-        id: deployment
+      - name: Publish website
+        id: publish
         uses: actions/deploy-pages@v4

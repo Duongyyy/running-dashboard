@@ -1,0 +1,7 @@
+Upload the CONTENTS of this folder into the MAIN page of your EXISTING GitHub repository (not inside Stride-Lab-Free-AutoSync-GitHub).
+
+See /mnt/data/Stride-Lab-GitHub-Existing-Repo-Guide.txt for the full setup.
+
+Then edit your existing file under .github/workflows and REPLACE its contents with stride-github-replace-workflow.yml (provided separately).
+
+The existing encrypted history and GitHub Actions secrets should remain untouched.

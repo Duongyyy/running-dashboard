@@ -43,6 +43,7 @@ jobs:
           GARMIN_PERSONAL_API_KEY: ${{ secrets.GARMIN_PERSONAL_API_KEY }}
           STRIDE_ARCHIVE_KEY: ${{ secrets.STRIDE_ARCHIVE_KEY }}
           PUBLISH_PHYSIOLOGY: ${{ vars.PUBLISH_PHYSIOLOGY }}
+          PUBLISH_ACTIVITY_SUMMARIES: ${{ vars.PUBLISH_ACTIVITY_SUMMARIES }}
           DETAIL_BATCH: '60'
         run: python cloud_sync.py
       - name: Save encrypted history (never plaintext)
